@@ -26,6 +26,14 @@ $c->{plugins}{"Screen::Workflow::AStorApprove"}{params}{disable} = 0;
 $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{mount_path} = "";
 
 #
+# Adding this as the api interaction assumes that we are looking on the arkivum root.
+# For most instances this will be the case, but not always if only a certain datapool 
+# is mounted tell us here
+#
+$c->{plugins}->{"Event::Arkivum"}->{params}->{datapool} = "";
+
+
+#
 # The URL of the A-Stor appliance. E.g. https://172.18.2.9:8443
 #
 
