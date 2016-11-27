@@ -1,33 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
-<epm xmlns='http://eprints.org/ep2/data/2.0' id='http://template.ulcc.ac.uk/id/epm/arkivum'>
+<epm xmlns='http://eprints.org/ep2/data/2.0' id='http://pok.pok.com/id/epm/arkivum'>
   <epmid>arkivum</epmid>
+  <uri>http://template.ulcc.ac.uk/id/epm/arkivum</uri>
   <documents>
     <document>
       <files>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>epm/arkivum/cfg/cfg.d/x_arkivum.pl</filename>
-          <mime_type>text/plain</mime_type>
-          <hash>9cc6afe1030200aa67e57a23840abdb0</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>9637</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>citations/astor/default.xml</filename>
-          <mime_type>application/xml</mime_type>
-          <hash>3d6bb3d6eedb7ecc78b9418f026e2b55</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>322</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>citations/astor_eprint/default.xml</filename>
-          <mime_type>application/xml</mime_type>
-          <hash>3d6bb3d6eedb7ecc78b9418f026e2b55</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>322</filesize>
-        </file>
         <file>
           <datasetid>document</datasetid>
           <filename>lang/en/phrases/astor.xml</filename>
@@ -38,11 +15,35 @@
         </file>
         <file>
           <datasetid>document</datasetid>
+          <filename>static/images/epm/arkivum.png</filename>
+          <mime_type>image/png</mime_type>
+          <hash>b481220081611dcc3f0c0f854155991d</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>25845</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>static/style/images/action_astor.png</filename>
+          <mime_type>image/png</mime_type>
+          <hash>c46202174b71dc7d49f94cb9885250be</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>2189</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
           <filename>plugins/EPrints/Plugin/Event/Arkivum.pm</filename>
           <mime_type>text/plain</mime_type>
-          <hash>b07f8866010947f0e13275087f29bd5e</hash>
+          <hash>44ca5786316ff3b013a9b631cae67847</hash>
           <hash_type>MD5</hash_type>
-          <filesize>56589</filesize>
+          <filesize>58456</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>plugins/EPrints/Plugin/Storage/ArkivumStorage.pm</filename>
+          <mime_type>text/plain</mime_type>
+          <hash>02cc2349144bfbde57ffe6437d877aa8</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>16093</filesize>
         </file>
         <file>
           <datasetid>document</datasetid>
@@ -51,6 +52,22 @@
           <hash>9fd488acfe1eed675a153bb4e4d0b4d9</hash>
           <hash_type>MD5</hash_type>
           <filesize>2548</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>plugins/EPrints/Plugin/Screen/Workflow/AStorEPrintApprove.pm</filename>
+          <mime_type>text/x-c++</mime_type>
+          <hash>20a63f4f3c90a552dfe22bcb7e9bed69</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>4788</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>plugins/EPrints/Plugin/Screen/Workflow/AStorApprove.pm</filename>
+          <mime_type>text/x-c++</mime_type>
+          <hash>a7b38900748f6652aae3849bf9ff1b05</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>2691</filesize>
         </file>
         <file>
           <datasetid>document</datasetid>
@@ -71,50 +88,10 @@
         <file>
           <datasetid>document</datasetid>
           <filename>plugins/EPrints/Plugin/Screen/EPrint/Document/AStor.pm</filename>
-          <mime_type>text/plain</mime_type>
+          <mime_type>text/x-c++</mime_type>
           <hash>91ccf2cca613c759f1a3ce06150dc057</hash>
           <hash_type>MD5</hash_type>
           <filesize>6402</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>plugins/EPrints/Plugin/Screen/Workflow/AStorApprove.pm</filename>
-          <mime_type>text/plain</mime_type>
-          <hash>a7b38900748f6652aae3849bf9ff1b05</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>2691</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>plugins/EPrints/Plugin/Screen/Workflow/AStorEPrintApprove.pm</filename>
-          <mime_type>text/plain</mime_type>
-          <hash>20a63f4f3c90a552dfe22bcb7e9bed69</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>4788</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>plugins/EPrints/Plugin/Storage/ArkivumStorage.pm</filename>
-          <mime_type>text/plain</mime_type>
-          <hash>02cc2349144bfbde57ffe6437d877aa8</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>16093</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>static/images/epm/arkivum.png</filename>
-          <mime_type>image/png</mime_type>
-          <hash>b481220081611dcc3f0c0f854155991d</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>25845</filesize>
-        </file>
-        <file>
-          <datasetid>document</datasetid>
-          <filename>static/style/images/action_astor.png</filename>
-          <mime_type>image/png</mime_type>
-          <hash>c46202174b71dc7d49f94cb9885250be</hash>
-          <hash_type>MD5</hash_type>
-          <filesize>2189</filesize>
         </file>
         <file>
           <datasetid>document</datasetid>
@@ -132,15 +109,56 @@
           <hash_type>MD5</hash_type>
           <filesize>373</filesize>
         </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>citations/astor/default.xml</filename>
+          <mime_type>application/xml</mime_type>
+          <hash>3d6bb3d6eedb7ecc78b9418f026e2b55</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>322</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>citations/astor_eprint/default.xml</filename>
+          <mime_type>application/xml</mime_type>
+          <hash>3d6bb3d6eedb7ecc78b9418f026e2b55</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>322</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>epm/arkivum/bin/get_astor_request</filename>
+          <mime_type>text/x-perl</mime_type>
+          <hash>1ddc76f8eb0919c520b82c5204c7648f</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>1075</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>epm/arkivum/src/eprints-arkivum-storage.svg</filename>
+          <mime_type>image/svg+xml</mime_type>
+          <hash>a09b90a3471610fa4e7d5fcd67a86911</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>35913</filesize>
+        </file>
+        <file>
+          <datasetid>document</datasetid>
+          <filename>epm/arkivum/cfg/cfg.d/x_arkivum.pl</filename>
+          <mime_type>text/plain</mime_type>
+          <hash>28c79803c68f74107b9dca2d9e1fbd34</hash>
+          <hash_type>MD5</hash_type>
+          <filesize>9904</filesize>
+        </file>
       </files>
-      <mime_type>image/svg+xml</mime_type>
-      <format>image</format>
-      <main>epm/arkivum/src/eprints-arkivum-storage.svg</main>
+      <mime_type>text/plain</mime_type>
+      <format>text</format>
+      <main>epm/arkivum/cfg/cfg.d/x_arkivum.pl</main>
       <content>install</content>
     </document>
     <document>
       <files>
         <file>
+          <datasetid>document</datasetid>
           <filename>static/images/epm/arkivum.png</filename>
           <mime_type>image/png</mime_type>
           <hash>b481220081611dcc3f0c0f854155991d</hash>
@@ -171,7 +189,7 @@
       <id>mark.pembury@arkivum.com</id>
     </item>
   </creators>
-  <datestamp>2015-01-26 17:02:48</datestamp>
+  <datestamp>2016-11-27 12:04:01</datestamp>
   <title>Arkivum A-Stor Storage Integration</title>
   <description>Use Arkivum&apos;s assured archive service to keep EPrints documents safe and secure for the long-term, with 100% guarantee against data loss.</description>
   <requirements>You will need to ensure the following Perl modules are installed:
