@@ -194,13 +194,13 @@ $c->add_dataset_trigger( "eprint", EP_TRIGGER_STATUS_CHANGE ,
     sub 
     {
         my ( %params ) = @_;
-        my $repository = %params->{repository};
+        my $repository = $params{repository};
 
         return undef if (!defined $repository);
 
-		    if (defined %params->{dataobj})
+		    if (defined $params{dataobj})
 		    {
-			      my $dataobj = %params->{dataobj};
+			      my $dataobj = $params{dataobj};
 			      my $eprintid = $dataobj->id;
 			
 			      # Get the eprint object so we can check the status
