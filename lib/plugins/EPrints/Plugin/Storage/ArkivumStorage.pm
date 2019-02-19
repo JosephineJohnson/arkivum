@@ -6,7 +6,11 @@ EPrints::Plugin::Storage::ArkivumStorage - storage to Arkivum assured archive se
 
 	# cfg.d/x_arkivum.pl
 	$c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{mount_path} = "...";
-	$c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{server_url} = "https:...";
+    $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{server_url} = "https://...";
+    $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{client_id} = "...";
+    $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{auth_url} = "https://...";
+    $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{client_secret} = "...";
+    $c->{plugins}->{"Storage::ArkivumStorage"}->{params}->{auth_client} = "...";
 
 
 =head1 DESCRIPTION
@@ -29,6 +33,7 @@ use EPrints::Plugin::Storage;
 use JSON qw(decode_json);
 use LWP::UserAgent;
 use File::Path;
+use JSON;
 
 
 @ISA = ("EPrints::Plugin::Storage");
@@ -145,7 +150,7 @@ sub open_read
 	my $in_fh;
 	if( !open($in_fh, "<", "$path/$fn") )
 	{
-		$self->{error} = "Unable to read from $path/$fn: $!";
+        $self->{error} = "Arkivum storage : Unable to read from $path/$fn: $!";
 		$self->{session}->get_repository->log( $self->{error} );
 		return undef;
 	}
@@ -197,34 +202,62 @@ sub open_write
 	return 1;
 }
 
+
+
+
 sub retrieve
 {
 	my( $self, $fileobj, $sourceid, $offset, $n, $f ) = @_;
-
-	return 0 if !$self->open_read( $fileobj, $sourceid, $f );
+    $self->_log("Arkivum Storage Log");
+     $self->_log($offset);
+     $self->_log($n);
+     $self->_log($f);
+    
+    
 	my( $path, $fn ) = $self->_filename( $fileobj, $sourceid );
+    
+     my $filename = $self->_map_to_astor_path($path);
+    
+    $self->_log($path);
+    
+    $self->_log($filename);
+    
+    my $response = $self->_astor_getFile_v5($filename);
+    my $rc = 1;
+    
+    $rc &&= &$f($response->content);
+    
+    return $rc;
+    
+    # return $response->content_ref;
+    
+    # return 0 if !$self->open_read( $fileobj, $sourceid, $f );
+	# my( $path, $fn ) = $self->_filename( $fileobj, $sourceid );
+    
+    
 
-	return undef if !defined $path;
+	# return undef if !defined $path;
 
-	my $fh = $self->{_fh}->{$fileobj};
+	# my $fh = $self->{_fh}->{$fileobj};
 
-	my $rc = 1;
+	# my $rc = 1;
 
-	sysseek($fh, $offset, SEEK_SET);
+	# sysseek($fh, $offset, SEEK_SET);
 
-	my $buffer;
-	my $bsize = $n > 65536 ? 65536 : $n;
-	while(sysread($fh,$buffer,$bsize))
-	{
-		$rc &&= &$f($buffer);
-		last unless $rc;
-		$n -= $bsize;
-		$bsize = $n if $bsize > $n;
-	}
+	# my $buffer;
+	# my $bsize = $n > 65536 ? 65536 : $n;
+	# while(sysread($fh,$buffer,$bsize))
+	# {
+	# 	$rc &&= &$f($buffer);
+	# 	last unless $rc;
+	# 	$n -= $bsize;
+	# 	$bsize = $n if $bsize > $n;
+	# }
 
-	$self->close_read( $fileobj, $sourceid, $f );
+	# $self->close_read( $fileobj, $sourceid, $f );
 
-	return $rc;
+	# return $rc;
+    
 }
 
 
@@ -406,6 +439,8 @@ sub _get_url
   my ( $local, $filesize ) = $self->_isAStorFileLocal($astorpath);
 
   my $ark_url;
+    
+  return $ark_url;
 
   if ( defined $local ) 
   {
@@ -591,23 +626,27 @@ sub _astor_getFileInfo
 {
 	  my( $self, $filename) = @_;
 
-	  my $api_url = "/api/2/files/fileInfo" . $filename;
-
-	  my $response = $self->_astor_getRequest($api_url);
+	  my $api_url = "/a6/api/2/files/fileInfo" . $filename;
+        
+      $self->_log($api_url);
+    
+	  my $response = $self->_astor_getRequest_v5($api_url);
+      $self->_log($response->as_string());
+      my $httpResponse = $response-> code;
 	  if ( not defined $response )
 	  {
 		    $self->_log("_astor_getFileInfo: Invalid response returned...");
 		    return;
 	  }
 
-	  if ($response->is_error) 
+	  if ($httpResponse ne 200)
 	  {
 		    $self->_log("_astor_getFileInfo: Invalid response returned: $response->status_line");
 		    return;
 	  }
 
 	  # Get the content which should be a json string
-	  my $json = decode_json($response->content);
+	  my $json = from_json($response->decoded_content());
 	  if ( not defined $json) 
 	  {
 		    $self->_log("_astor_getFileInfo: Invalid response returned...");
@@ -648,6 +687,114 @@ sub _astor_getRequest
 	return $response;
 }
 
+sub _astor_getRequest_v5
+{
+    my( $self, $url ) = @_;
+    
+    my $ark_server = $self->param( "server_url" );
+    my $ark_token = $self->_astor_postRequest_token();
+    my $client = $self->param("client_id");
+    my $server_url = $ark_server . $url;
+    $self->_log($server_url);
+    
+    my $ua= LWP::UserAgent->new(ssl_opts => {verify_hostname => 0,SSL_verify_mode => 0x00});
+    
+    my $response = $ua->get( $server_url,'Authorization' => 'Bearer '.$ark_token,'X-Tenant-Id' => $client);
+    return $response;
+}
+
+
+
+sub _astor_getFilePathInfo
+{
+    my( $self, $path) = @_;
+    
+    if ( not defined $path )
+    {
+        $self->_log("_astor_getFilePathInfo: No path specified");
+        return;
+    }
+    
+    my $api_url = "/a6/files" . $path;
+    $self->_log("_astor_getFilePathInfo:");
+    $self->_log($api_url);
+    
+    my $response = $self->_astor_getRequest_v5($api_url);
+    if ( not defined $response )
+    {
+        $self->_log("_astor_getFilePathInfo: Invalid response returned...");
+        return;
+    }
+    
+    if ($response->is_error)
+    {
+        $self->_log("_astor_getFilePathInfo: Invalid response returned: $response->status_line");
+        return;
+    }
+    
+    # Get the content which should be a json string
+    my $json = decode_json($response->content);
+    if ( not defined $json)
+    {
+        $self->_log("_astor_getFilePathInfo: Invalid response returned...");
+        return;
+    }
+    
+    return $json;
+}
+
+sub _astor_getFile_v5
+{
+    my( $self, $path) = @_;
+    
+    if ( not defined $path )
+    {
+        $self->_log("Arkivum Storage :: _astor_getFile_v5: No path specified");
+        return;
+    }
+    
+    # First we need to get the UUID of the folder in A-Stor
+    # so we can make the restore request
+    my $response = $self->_astor_getFilePathInfo($path);
+    if ( not defined $response )
+    {
+        $self->_log("Arkivum Storage :: _astor_getFile_v5: Invalid response returned...");
+        return;
+    }
+    
+    # We have a response in json so we can now get the filename we need
+    my $name = @{$response->{"files"}}[0]->{"name"};
+    
+    my $api_url = "/a6/files" . $path . "/" . $name;
+    
+    $self->_log("Arkivum Storage :: _astor_getFile_v5: ");
+    $self->_log($api_url);
+    
+    $response = $self->_astor_getRequest_v5($api_url);
+    my $httpResponse = $response-> code;
+    if ( not defined $response )
+    {
+        $self->_log("Arkivum Storage :: _astor_getRestoreRequest_v5: Invalid response returned...");
+        return;
+    }
+    
+    if ($httpResponse ne 200)
+    {
+        $self->_log("Arkivum Storage :: _astor_getRestoreRequest_v5: Invalid response returned: $response->status_line");
+        return;
+    }
+    
+    # Get the content which should be a json string
+    #my $json = from_json($response->decoded_content());
+    
+    #if ( not defined $json)
+    #{
+    #$self->_log("_astor_postRestoreRequest: Invalid response returned...");
+    #return;
+    #}
+    
+    return $response;
+}
 
 sub _astor_deleteRequest 
 {
@@ -663,6 +810,39 @@ sub _astor_deleteRequest
 	return $response;
 }
 
+sub _astor_postRequest_token
+{
+    my( $self) = @_;
+    
+    $self->_log("Post Request for Token");
+    
+    my $ua       = LWP::UserAgent->new(agent => 'Arkivum' ,  ssl_opts => {verify_hostname => 0,SSL_verify_mode => 0x00});
+    
+    my $url = $self->param("auth_url");
+    
+    my $client_id = $self->param("auth_client");
+    
+    my $client_secret = $self->param("client_secret");
+    
+    my $response = $ua -> post($url,[grant_type => 'client_credentials',client_id => $client_id, client_secret => $client_secret,Content_Type => 'application/x-www-form-urlencoded; charset=utf-8', scope => 'openid User.Read']);
+    
+    my $httpResponse = $response->code;
+    
+    if ($httpResponse ne 200)
+    {
+        $self->_log("_astor_postRequest_token: Invalid response returned: Token not available");
+        return;
+        
+    }
+    
+    else
+    {
+        my $jsonContent = from_json($response->decoded_content());
+        my $token = $jsonContent->{"access_token"};
+        return $token;
+        
+    }
+}
 
 sub _set_debug {
 	my ( $self, $enabled) = @_;

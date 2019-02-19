@@ -6,6 +6,10 @@ EPrints::Plugin::Event::Arkivum - Event task to manage archiving to A-Stor servi
 
 	# cfg.d/x_arkivum.pl
 	$c->{plugins}->{"Event::Arkivum"}->{params}->{server_url} = "https://...";
+    $c->{plugins}->{"Event::Arkivum"}->{params}->{client_id} = "...";
+    $c->{plugins}->{"Event::Arkivum"}->{params}->{auth_url} = "https://...";
+    $c->{plugins}->{"Event::Arkivum"}->{params}->{client_secret} = "...";
+    $c->{plugins}->{"Event::Arkivum"}->{params}->{auth_client} = "...";
 
 =head1 DESCRIPTION
 
@@ -25,6 +29,8 @@ use strict;
 
 use JSON qw(decode_json);
 use LWP::UserAgent;
+use File::Basename;
+use JSON;
 
 
 sub new
@@ -97,6 +103,7 @@ sub astor_checker
 	  if ( $rcount != 0)
 	  {
 		    $self->_log("Found some astor records to check...");
+		    $self->_log($ark_server);
 		    $self->_process_doc_requests( "astor", "astor_status", "archive_scheduled", "astor_doc_copy");
 		    $self->_process_doc_requests( "astor", "astor_status", "ingest_in_progress", "astor_doc_status_checker");
 		    $self->_process_doc_requests( "astor", "astor_status", "ingested", "astor_doc_status_checker");
@@ -243,7 +250,7 @@ sub astor_eprint_restore_request
 
 	  # Get the repository
 	  my $repository = $self->{repository};
-
+      $self->_log("astor_eprint_restore_request");
 	  # Get the eprint we need to process
 	  my $eprint = new EPrints::DataObj::EPrint( $repository, $eprintid );
 	  if ( not defined $eprint )
@@ -469,6 +476,7 @@ sub astor_eprint_archive_checker
 			  if ($task_count == $escrow_count) 
 			  {
 			      # We have now finished replicating so we remove the local copy
+                  $self->_log("Remove Local Copy $eprintid");
 			      my $ok = $self->_remove_local_eprint_copy($eprintid);
 
             if ($ok)
@@ -723,34 +731,34 @@ sub astor_doc_copy
 	  }
 
 	  # Get the status info of the A-Stor server
-	  my $json = $self->_astor_getStatusInfo();
-	  if ( not defined $json ) {
-		    $self->_log("astor_doc_copy: A-Stor service not available..");
-		    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
-	  }
+    my $freespace = $self->_astor_getStatusInfo();
+    #if ( not defined $json ) {
+    #$self->_log("astor_doc_copy: A-Stor service not available..");
+    #return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
+    #}
 
 	  # We have contact with the server and have the status
 	  # so check the free space before we do anything
-	  my $freespace = $json->{'storage'}{'bytesFree'};
-	  my $totalsize = 0;
+    #my $freespace = $json->{'Storage'}{'BytesFree'};
+    my $totalsize = 0;
 
 	  # We need to check the freespace before we copy the file(s)
 	  # Over to A-Stor. We should only have one file per document
 	  # but this may change so we will get and check all files 
 	  # attached to the document before copying them over.
-	  foreach my $file (@{$doc->get_value( "files" )})
-	  {
-		    my $filesize = $file->value( "filesize" );
-		    $totalsize = $totalsize + $filesize;
-	  }
+    foreach my $file (@{$doc->get_value( "files" )})
+    {
+        my $filesize = $file->value( "filesize" );
+        $totalsize = $totalsize + $filesize;
+    }
 	
 	  # Now we have the total size in bytes of this copy request
 	  # we can check the freespace and abort is we don't have
 	  # enough
-	  if ( $totalsize > $freespace ) {
-		    $self->_log("astor_doc_copy: Not enough freespace on A-Stor, copy aborted...");
-		    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
-	  }
+    if ( $totalsize > $freespace ) {
+    $self->_log("astor_doc_copy: Not enough freespace on device, copy aborted...");
+    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
+    }
 
 	  # Copy all files attached to the document
 	  foreach my $file (@{$doc->get_value( "files" )})
@@ -758,13 +766,41 @@ sub astor_doc_copy
 		    # Get the remapped file path so we can find it within A-Stor
 		    my $filename = $self->_map_to_astor_path($file->get_local_copy());
 
+            my $folder = dirname $filename;
+            $self->_log($folder);
 		    # Copy the file to A-Stor
-		    my $ok = $storage->copy( $plugin, $file);
-		    if (not $ok) 
-		    {
-			      $self->_log("astor_doc_copy: Error copying $filename to A-Stor...");
-			      return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
-		    }
+          #my $ok = $storage->copy( $plugin, $file);
+          # if (not $ok)
+          # {
+          #$self->_log("astor_doc_copy: Error copying $filename to A-Stor...");
+          #return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
+          # }
+          my $api_url = "/a6/files" . $folder;
+          $self->_log("astor_doc_copy:");
+          $self->_log($api_url);
+          my $response = $self->_astor_postRequest_uploadFile($api_url,$file);
+          my $httpResponse = $response->code;
+          if ( not defined $response )
+          {
+              $self->_log("astor_doc_copy: Invalid response returned...");
+              return;
+          }
+          
+          if ( $httpResponse ne 200)
+          {
+              $self->_log("astor_doc_copy: Invalid response returned: $response->content");
+              $self->_log($response->as_string);
+
+              return;
+          }
+          
+          # Get the content which should be a json string
+          #my $json = decode_json($response->content);
+          #if ( not defined $json)
+          #{
+          #$self->_log("astor_doc_copy: Invalid response returned...");
+          #return;
+          #}
 
 		    # Commit the changes to the file object otherwise it doesn't persist
 		    $file->commit();
@@ -842,29 +878,23 @@ sub astor_doc_status_checker
 			      $self->_log("astor_doc_status_checker: Error getting file info from A-Stor for Document $docid..");
 			      return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
 		    }
-
-#JAS Have removed this as it no longer returns an array
-#JAS We need to do some form of 'empty' check here ????
-#JAS SEE NEW getFileInfo code		
-#JAS		    # Check we have some results before we try to get them. We should have one result
-#JAS		    my $rcount = @{$fileInfo->{"results"}};
-#JAS		    if ( $rcount ne 1 )
-#JAS		    {
-#JAS			      $self->_log("astor_doc_status_checker: No file info returned from A-Stor for Document $docid. This file may be in the process of being removed.");
-#JAS	          return EPrints::Const::HTTP_OK;
-#JAS		    }
+		
+		    # Check we have some results before we try to get them. We should have one result
+          #my $rcount = @{$fileInfo->{"results"}};
+          #if ( $rcount ne 1 )
+          #{
+          #$self->_log("astor_doc_status_checker: No file info returned from A-Stor for Document $docid. This file may be in the process of being removed.");
+          #return EPrints::Const::HTTP_OK;
+          # }
 		
 		    # Get the ingest and replication status values from A-Stor
-#JAS		    my $ingestState = @{$fileInfo->{"results"}}[0]->{"ingestState"};
-#JAS		    my $replState   = @{$fileInfo->{"results"}}[0]->{"replicationState"};
-#JAS		    my $astorMD5	= @{$fileInfo->{"results"}}[0]->{"MD5checksum"};
-		    my $ingestState = $fileInfo->{"ingestState"};
-		    my $replState   = $fileInfo->{"replicationState"};
-		    my $astorMD5	= $fileInfo->{"md5"};
+            my $ingestState = "FINAL";
+		    my $replState   = $fileInfo->{"state"};
+            my $astorMD5	= $fileInfo->{"md5"};
 		
 	      if ($astor_status eq "ingest_in_progress") 
 	      {
-		        if ( $ingestState eq "FINAL" ) 
+		        if ( $replState ne "Unknown" )
 		        {
 			          # We should check the MD5 Checksum of the file in both EPrints and A-Stor 
 			          # to ensure they are the same. If they are not then we report this and 
@@ -874,11 +904,14 @@ sub astor_doc_status_checker
 			          # We will need to check it exists and that its type is md5
 			          # if it does not exist or its not md5 then we generate one
 			          my $hashType = $file->get_value( "hash_type" );
+                      $self->_log($hashType);
+                      $file->update_md5();
+                      $file->commit();
 
 			          if ( not defined $hashType or $hashType ne 'MD5' ) 
 			          {
-				            $file->update_md5();
-				            $file->commit();
+                          $file->update_md5();
+                          $file->commit();
 			          }
 
 			          my $eprintsMD5 = $file->get_value( "hash" );
@@ -900,13 +933,13 @@ sub astor_doc_status_checker
 	      }
 	      elsif ($astor_status eq "ingested") 
 	      {
-		        if ( $replState eq "amber" ) 
+		        if ( $replState eq "DC2_VERIFIED" && $replState eq "ESC_ACCEPTED" )
 		        {
 			          $state_count = $state_count + 1;
 		        }
 
 		        # We may have replicated already so fix the status value
-		        if ( $replState eq "green" ) 
+		        if ( $replState eq "DC2_VERIFIED" || $replState eq "ESC_ACCEPTED")
 		        {
 			          $astor_status = "replicated";
 			          $state_count = $state_count + 1;
@@ -914,7 +947,7 @@ sub astor_doc_status_checker
 	      }
 	      elsif($astor_status eq "replicated")
 	      { 
-		      if ( $replState eq "green" ) 
+		      if ( $replState eq "DC2_VERIFIED" || $replState eq "ESC_ACCEPTED")
 		      {
 			        $state_count = $state_count + 1;
 		      }
@@ -1093,9 +1126,7 @@ sub astor_doc_delete_checker
 			      $self->_log("astor_doc_delete_checker: Error getting file info from A-Stor for Document $docid..");
 			      return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
 		    }
-
-#JAS Need to do something here to determine if file exist and increment count if it does
-#JAS We need to do some form of 'empty' check here ????		
+		
 		    # Check if any files have been returned in the results. We are expecting
 		    # zero, so if state_count for all files is not zeor then we can't 
 		    # change the status
@@ -1168,8 +1199,9 @@ sub astor_doc_restore_request
 	  my( $path, $fn ) = $self->_filename( $main, $main->get_value("filename"));
 	  
 	  # Make the request to restore the path
-	  my $requestInfo = $self->_astor_postRestoreRequest($path);
-	  if ( not defined $requestInfo )
+      #my $requestInfo = $self->_astor_postRestoreRequest($path);
+      my $requestInfo = $self-> _astor_getRestoreRequest_v5($path);
+	  if ( $requestInfo ne 200 )
 	  {
 		    $self->_log("astor_doc_restore_request: Error getting request info from A-Stor for Document path $path");
 		    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
@@ -1177,9 +1209,10 @@ sub astor_doc_restore_request
 	
 	  # We have a valid response so we need to extract the request id and store it
 	  # so we can check it later
-	  my $requestId = $requestInfo->{'id'};
+      #my $requestId = $requestInfo->{'id'};
+      #my $name = @{$requestInfo->{"files"}}[0]->{"name"};
 	
-	  $self->_update_astor_record($astorid, "astor_request_uuid", $requestId);
+      #$self->_update_astor_record($astorid, "astor_request_uuid", $requestId);
 		
 	  $self->_update_astor_record($astorid, "astor_status", "restore_in_progress");
 
@@ -1225,23 +1258,23 @@ sub astor_doc_restore_checker
 		    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
 	  }
 
-	  # Get the request id from the astor record
-	  my $requestId = $astor->get_value("astor_request_uuid");
+      # Get the request id from the astor record
+    #my $requestId = $astor->get_value("astor_request_uuid");
 
 	  # Get the request status
-	  my $requestInfo = $self->_astor_getRestoreRequest($requestId);
-	  if ( not defined $requestInfo )
-	  {
-		    $self->_log("astor_doc_restore_request: Error getting restore request info from A-Stor for Document $docid");
-		    return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
-	  }
-    my $status = $requestInfo->{'status'};
+    #my $requestInfo = $self->_astor_getRestoreRequest($requestId);
+    #if ( not defined $requestInfo )
+    #{
+    #$self->_log("astor_doc_restore_request: Error getting restore request info from A-Stor for Document $docid");
+    #return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
+    #}
+    #my $status = $requestInfo->{'status'};
 	
 	  # If the request has not yet completed then we go no further
-	  if ( $status ne "Completed" ) 
-	  {
-	      return EPrints::Const::HTTP_OK;
-	  }
+    #if ( $status ne "Completed" )
+    #{
+    #return EPrints::Const::HTTP_OK;
+    #}
     
     # The request has completed so we now check the files of the document to see
     # if all of them are local. If they are then we have finished
@@ -1261,26 +1294,25 @@ sub astor_doc_restore_checker
 		
 		        # Search for the file information so we can extract the state values we need
 		        my $fileInfo = $self->_astor_getFileInfo($filename);
-		        if ( not defined $fileInfo )
+              if ( not defined $fileInfo )
 		        {
 			          $self->_log("astor_doc_restore_checker: Error getting file info from A-Stor for Document $docid..");
 			          return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
 		        }
 
             # Check we have some results returned from A-Stor
-# We need to do some form of 'empty' check here ????		
-#JAS		        my $rcount = @{$fileInfo->{"results"}};
-#JAS		        if ( $rcount ne 1 )
-#JAS		        {
-#JAS			          $self->_log("astor_doc_restore_checker: No file info returned from A-Stor for Document $docid..");
-#JAS			          return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
-#JAS		        }
+              #my $rcount = $fileInfo->{"results"};
+              #if ( $rcount ne 1 )
+              #{
+              #$self->_log("astor_doc_restore_checker: No file info returned from A-Stor for Document $docid..");
+              #return EPrints::Const::HTTP_INTERNAL_SERVER_ERROR;
+              #}
 		
 		        # Get the local property of the file and test it
-#JAS		        my $local = @{$fileInfo->{"results"}}[0]->{"local"};
-		        my $local = $fileInfo->{"local"};
+              #my $local = @{$fileInfo->{"results"}}[0]->{"local"};
+              my $state =$fileInfo->{"state"};
 		
-		        if ( $local eq "true" )
+		        if ( $state eq "EscVerified" )
 		        {
 		            $state_count = $state_count + 1;
 		        }
@@ -1418,6 +1450,7 @@ sub _remove_local_eprint_copy
 		        foreach my $copy (@{$file->value('copies')})
 		        {
 		            my $pluginid = $copy->{'pluginid'};
+                    $self->_log($pluginid);
 
 		            if ($pluginid eq $plugin_astor)
 		            {
@@ -1427,9 +1460,11 @@ sub _remove_local_eprint_copy
 		      
 		        if ($remove_copy == 1) 
 		        {
+                    $self->_log("Remove file $filename");
 		          my $ok = $storage->delete_copy($plugin, $file);
 		          if ($ok)
 		          {
+                      $self->_log("removed file $filename");
 		              $file->commit();
 		          }
 		        }
@@ -1665,10 +1700,12 @@ sub _astor_getStatusInfo
 {
 	  my( $self ) = @_;
 
-	  my $api_url = "/json/status/info/";
+    #my $api_url = "/a6/json/status/info";
+      my $api_url = "/stats/dashboard";
 	
 	  my $response = $self->_astor_getRequest($api_url);
-	  if ( not defined $response )
+      my $httpResponse = $response->code;
+	  if ($httpResponse ne 200 )
 	  {
 		    $self->_log("Inavlid response returned in __astor_getStatus");
 		    return;
@@ -1676,81 +1713,77 @@ sub _astor_getStatusInfo
 
 	  if ($response->is_error) 
 	  {
-		    $self->_log("Invalid response returned in __astor_getStatus: $response->status_line");
+		    $self->_log("Invalid response returned in __astor_getStatus: ".$response->as_string);
 		    return;
 	  }
     
 	  # Get the content which should be a json string
-	  my $json = decode_json($response->content);
+	  my $json = from_json($response->decoded_content());
 	  if ( not defined $json) {
 		    $self->_log("Invalid response returned in __astor_getStatus");
 		    return;
 	  }
+      my $bytesUsed = 0;
+      my $scale = $json->{'scale'};
+      if ($scale eq 'MB'){
+        $bytesUsed = $json->{'largestLocation'}{'totalSize'} *1024 *1024;
+      } elsif ($scale eq 'KB'){
+        $bytesUsed = $json->{'largestLocation'}{'totalSize'} *1024;
+      } elsif ($scale eq 'GB'){
+        $bytesUsed = $json->{'largestLocation'}{'totalSize'} *1024 *1024 *1024;
+      }elsif ($scale eq 'TB'){
+        $bytesUsed = $json->{'largestLocation'}{'totalSize'} *1024 *1024 *1024 *1024;
+      };
+      $self->_log("Bytes Used:". $bytesUsed);
+     my $api_url2 = "/datapool";
+     my $response2 = $self->_astor_getRequest($api_url2);
+    if ( not defined $response2 )
+    {
+        $self->_log("Inavlid response returned in __astor_getStatus");
+        return;
+    }
     
-	  return $json;
+    if ($response2->is_error)
+    {
+        $self->_log("Invalid response returned in __astor_getStatus: ".$response->as_string);
+        return;
+    }
+    my $json2 = from_json($response2->decoded_content());
+    if ( not defined $json2) {
+        $self->_log("Invalid response returned in __astor_getStatus");
+        return;
+    }
+    my $totalBytes = @{$json2->{"resultList"}}[0]->{"quota"};
+    
+    my $bytesAvailable =$totalBytes - $bytesUsed;
+    
+	  return $bytesAvailable;
 }
 
-#JAS The old 'search code'
-#JAS Replaced with the code below
-#sub _astor_getFileInfo
-#{
-#	  my( $self, $filename) = @_;
-#
-#	  my $api_url = "/json/search/files?path=" . $filename;
-#
-#	  my $response = $self->_astor_getRequest($api_url);
-#	  if ( not defined $response )
-#	  {
-#		    $self->_log("_astor_getFileInfo: Invalid response returned...");
-#		    return;
-#	  }
-#
-#	  if ($response->is_error) 
-#	  {
-#		    $self->_log("_astor_getFileInfo: Invalid response returned: $response->status_line");
-#		    return;
-#	  }
-#
-#	  # Get the content which should be a json string
-#	  my $json = decode_json($response->content);
-#	  if ( not defined $json) 
-#	  {
-#		    $self->_log("_astor_getFileInfo: Invalid response returned...");
-#		    return;
-#	  }
-#    
-#	  return $json;
-#}
 
-#JAS New getFileInfo
-#JAS Replaces the original code
-#JAS
 sub _astor_getFileInfo
 {
 	  my( $self, $filename) = @_;
-###############
-# RM add datapool config item for when astor is mounted to a datapool directory rather than arkivum root
-###############
-	  my $datapool = $self->param( "datapool" );
 
-	  my $api_url = "/api/2/files/fileInfo/" . $datapool . $filename;
-###############
+	  my $api_url = "/a6/api/2/files/fileInfo" . $filename;
+
 	  my $response = $self->_astor_getRequest($api_url);
-
+      $self->_log($response->as_string());
+      my $httpResponse = $response-> code;
 	  if ( not defined $response )
 	  {
 		    $self->_log("_astor_getFileInfo: Invalid response returned...");
 		    return;
 	  }
 
-	  if ($response->is_error) 
+	  if ($httpResponse ne 200)
 	  {
-		    $self->_log("_astor_getFileInfo: Invalid response returned: ".$response->status_line);
+		    $self->_log("_astor_getFileInfo: Invalid response returned: $response->status_line");
 		    return;
 	  }
 
 	  # Get the content which should be a json string
-	  my $json = decode_json($response->content);
+	  my $json = from_json($response->decoded_content());
 	  if ( not defined $json) 
 	  {
 		    $self->_log("_astor_getFileInfo: Invalid response returned...");
@@ -1771,13 +1804,9 @@ sub _astor_getFilePathInfo
 		    return;
 	  }
 
-###############
-# RM add datapool config item for when astor is mounted to a datapool directory rather than arkivum root
-###############
-	  my $datapool = $self->param( "datapool" );
-	 
-	  my $api_url = "/files/" . $datapool ."/". $path;
-###############
+	  my $api_url = "/a6/files" . $path;
+      $self->_log("_astor_getFilePathInfo:");
+      $self->_log($api_url);
 	  
 	  my $response = $self->_astor_getRequest($api_url);
 	  if ( not defined $response )
@@ -1824,11 +1853,12 @@ sub _astor_postRestoreRequest
 	  }
 
     # We have a response in json so we can now get the UUID we need
-	  my $UUID = @{$response->{"files"}}[0]->{"id"};
+     my $UUID = @{$response->{"files"}}[0]->{"id"};
 
-	  my $api_url = "/api/2/local-cache/restore-request/" . $UUID;
+    my $api_url = "/api/2/local-cache/restore-request/" . $UUID;
 
-	  $response = $self->_astor_postRequest($api_url);
+    $response = $self->_astor_postRequest($api_url);
+    
 	  if ( not defined $response )
 	  {
 		    $self->_log("_astor_postRestoreRequest: Invalid response returned...");
@@ -1852,6 +1882,61 @@ sub _astor_postRestoreRequest
     
 	  return $json;
 }
+
+sub _astor_getRestoreRequest_v5
+{
+    my( $self, $path) = @_;
+    
+    if ( not defined $path )
+    {
+        $self->_log("_astor_getRestoreRequest_v5: No path specified");
+        return;
+    }
+    
+    # First we need to get the UUID of the folder in A-Stor
+    # so we can make the restore request
+    my $response = $self->_astor_getFilePathInfo($path);
+    if ( not defined $response )
+    {
+        $self->_log("_astor_getRestoreRequest_v5: Invalid response returned...");
+        return;
+    }
+    
+    # We have a response in json so we can now get the UUID we need
+    #my $UUID = @{$response->{"files"}}[0]->{"id"};
+    my $name = @{$response->{"files"}}[0]->{"name"};
+    
+    #my $api_url = "/api/2/local-cache/restore-request/" . $UUID;
+    my $api_url = "/a6/files" . $path . "/" . $name;
+    
+    #$response = $self->_astor_postRequest($api_url);
+    $response = $self->_astor_getRequest($api_url);
+    my $httpResponse = $response-> code;
+    
+    if ( not defined $response )
+    {
+    $self->_log("_astor_getRestoreRequest_v5: Invalid response returned...");
+    return;
+    }
+    
+    if ($httpResponse ne 200)
+    {
+        $self->_log("_astor_getRestoreRequest_v5: Invalid response returned: $response->status_line");
+        return;
+    }
+    
+    # Get the content which should be a json string
+    #my $json = from_json($response->decoded_content());
+    
+    #if ( not defined $json)
+    #{
+    #$self->_log("_astor_postRestoreRequest: Invalid response returned...");
+    #return;
+    #}
+    
+    return $httpResponse;
+}
+
 
 
 sub _astor_getRestoreRequest
@@ -1896,25 +1981,83 @@ sub _astor_getRequest
 	  my( $self, $url ) = @_;
 
 	  my $ark_server = $self->param( "server_url" );
-	  my $server_url = $ark_server . $url;
-	  my $ua       = LWP::UserAgent->new();
-	  my $response = $ua->get( $server_url );
     
-	  return $response;
+    my $ark_token = $self->_astor_postRequest_token();
+      my $client = $self->param("client_id");
+	  my $server_url = $ark_server . $url;
+      $self->_log($server_url);
+
+    my $ua= LWP::UserAgent->new(ssl_opts => {verify_hostname => 0,SSL_verify_mode => 0x00});
+    
+    my $response = $ua->get( $server_url,'Authorization' => 'Bearer '.$ark_token,'X-Tenant-Id' => $client);
+    return $response;
 }
 
-
-sub _astor_postRequest 
+sub _astor_postRequest
 {
-	  my( $self, $url ) = @_;
-
-	  my $ark_server = $self->param( "server_url" );
-	  my $server_url = $ark_server . $url;
-
-	  my $ua       = LWP::UserAgent->new();
-	  my $response = $ua->post( $server_url );
+    my( $self, $url ) = @_;
     
-	  return $response;
+    my $ark_server = $self->param( "server_url" );
+    my $server_url = $ark_server . $url;
+    
+    my $ua       = LWP::UserAgent->new();
+    my $response = $ua->post( $server_url );
+    
+    return $response;
+}
+
+    sub _astor_postRequest_uploadFile
+    {
+          my( $self, $url ,$file) = @_;
+
+          my $ark_server = $self->param( "server_url" );
+          my $ark_token = $self->_astor_postRequest_token();
+          my $client = $self->param("client_id");
+        my $server_url = $ark_server . $url;
+        my $ua       = LWP::UserAgent->new();
+        my $filename = $self->_map_to_astor_path($file->get_local_copy());
+        my $parent = $file->get_parent();
+        my $folder = $parent->local_path();
+        my $filenameonly = $file->get_value("filename");
+        my $eprintsPath = $folder . "/" .$filenameonly;
+        $self->_log($eprintsPath);
+        my $uploadData = {file => [$eprintsPath => $filenameonly],};
+        my $response = $ua->post( $server_url,'Authorization' => 'Bearer '.$ark_token,'X-Tenant-Id' => $client ,Content_Type => 'form-data',Content => $uploadData);
+          return $response;
+    }
+
+sub _astor_postRequest_token
+{
+    my( $self) = @_;
+    
+    $self->_log("Post Request for Token");
+    
+    my $ua       = LWP::UserAgent->new(agent => 'Arkivum' ,  ssl_opts => {verify_hostname => 0,SSL_verify_mode => 0x00});
+    
+    my $url = $self->param("auth_url");
+    
+    my $client_id = $self->param("auth_client");
+    
+    my $client_secret = $self->param("client_secret");
+    
+    my $response = $ua -> post($url,[grant_type => 'client_credentials',client_id => $client_id, client_secret => $client_secret,Content_Type => 'application/x-www-form-urlencoded; charset=utf-8', scope => 'openid User.Read']);
+    
+    my $httpResponse = $response->code;
+    
+    if ($httpResponse ne 200)
+    {
+        $self->_log("_astor_postRequest_token: Invalid response returned: Token not available");
+        return;
+
+    }
+    
+    else
+    {
+        my $jsonContent = from_json($response->decoded_content());
+        my $token = $jsonContent->{"access_token"};
+        return $token;
+        
+    }
 }
 
 
@@ -1958,7 +2101,6 @@ sub _map_to_astor_path
 	
 	  return $mapped_path;
 }
-
 
 sub _filename
 {
